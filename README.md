@@ -24,3 +24,6 @@
 
 **overlap_triangle_bw**
 - (circle, triangle, black, black, triangle above)
+
+# next steps for this week
+- train basic models, basic MLP, complex CNN, fine tune image recognition model

@@ -13,7 +13,7 @@ CIRCLE_BW_DIR = "data/overlap_circle_bw"
 NO_OVERLAP_DIR = "data/no_overlap"
 NO_OVERLAP_BW_DIR = "data/no_overlap_bw"
 
-N_IMAGES = 250
+N_IMAGES = 1000
 
 # generate a random shape
 def random_circle():
