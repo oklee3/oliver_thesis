@@ -6,18 +6,13 @@ from sklearn.metrics import accuracy_score
 from pathlib import Path
 import joblib
 
-# ------------------------
-# Config
-# ------------------------
 DATA_DIR = Path("data")
-IMAGE_SIZE = (128, 128)  # your image size
-EPOCH_LIST = [5, 10, 20, 50]
+IMAGE_SIZE = (128, 128)
+EPOCH_LIST = [10, 20, 50]
 MODEL_DIR = Path("models")
 MODEL_DIR.mkdir(exist_ok=True)
 
-# ------------------------
-# Function: Load Dataset
-# ------------------------
+# load dataset
 def load_split(split_path):
     X = []
     y = []
@@ -35,17 +30,14 @@ def load_split(split_path):
             img = Image.open(img_path).convert("RGB")
             img = img.resize(IMAGE_SIZE)
 
-            img_array = np.array(img) / 255.0  # normalize
-            img_flat = img_array.flatten()     # IMPORTANT for sklearn MLP
+            img_array = np.array(img) / 255.0
+            img_flat = img_array.flatten()
 
             X.append(img_flat)
             y.append(label)
 
     return np.array(X), np.array(y), class_to_idx
 
-# ------------------------
-# Load Data
-# ------------------------
 X_train, y_train, class_map = load_split(DATA_DIR / "train")
 X_val, y_val, _ = load_split(DATA_DIR / "val")
 X_test, y_test, _ = load_split(DATA_DIR / "test")
@@ -54,11 +46,9 @@ print("Train shape:", X_train.shape)
 print("Val shape:", X_val.shape)
 print("Test shape:", X_test.shape)
 
-# ------------------------
-# Train at Different Epochs
-# ------------------------
 results = {}
 
+# train at diff epochs
 for epochs in EPOCH_LIST:
     print(f"\n===== Training MLP (sklearn) for {epochs} epochs =====")
 
@@ -73,16 +63,16 @@ for epochs in EPOCH_LIST:
 
     model.fit(X_train, y_train)
 
-    # SAVE THE MODEL (NEW LINE)
+    # save model
     model_path = MODEL_DIR / f"mlp_sklearn_{epochs}_epochs.joblib"
     joblib.dump(model, model_path)
     print(f"Saved model to: {model_path}")
 
-    # Validation accuracy
+    # validation accuracy
     val_preds = model.predict(X_val)
     val_acc = accuracy_score(y_val, val_preds)
 
-    # Test accuracy
+    # test accuracy
     test_preds = model.predict(X_test)
     test_acc = accuracy_score(y_test, test_preds)
 
@@ -94,9 +84,7 @@ for epochs in EPOCH_LIST:
     print(f"Validation Accuracy: {val_acc:.4f}")
     print(f"Test Accuracy: {test_acc:.4f}")
 
-# ------------------------
-# Final Results
-# ------------------------
+# final results
 print("\n===== Final Results =====")
 for ep, metrics in results.items():
     print(f"Epochs: {ep} | Val Acc: {metrics['val_acc']:.4f} | Test Acc: {metrics['test_acc']:.4f}")
