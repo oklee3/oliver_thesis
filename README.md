@@ -27,3 +27,12 @@
 
 # next steps for this week
 - train basic models, basic MLP, complex CNN, fine tune image recognition model
+
+# Basic Results:
+**CNN**
+- overfits to training data very quickly, reaches 100% train accuracy within 10 epochs
+- ~70% test accuracy
+- little change from 10 to 20 epochs, test accuracy slightly worse
+
+**MLP**
+- 
