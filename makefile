@@ -38,3 +38,6 @@ train_cnn:
 
 confusion_matrix_mlp:
 	python3 src/generate_confusion_matrix.py
+
+confusion_matrix_cnn:
+	python3 src/confusion_matrix_cnn.py
