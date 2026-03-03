@@ -30,11 +30,11 @@ no_overlap:
 no_overlap_bw:
 	python3 test_script.py no_overlap_bw
 
-all:
-	python3 test_script.py overlap_triangle
-	python3 test_script.py overlap_triangle_bw
-	python3 test_script.py overlap_circle
-	python3 test_script.py overlap_circle_bw
-	python3 test_script.py no_overlap
-	python3 test_script.py no_overlap_bw
+train_mlp:
+	python3 src/train_mlp.py
 
+train_cnn:
+	python3 src/train_cnn.py
+
+confusion_matrix_mlp:
+	python3 src/generate_confusion_matrix.py

@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from pathlib import Path
 from PIL import Image
 import joblib
@@ -34,6 +35,36 @@ def load_split(split_path):
 
     return np.array(X), np.array(y), class_to_idx
 
+def plot_confusion_matrix(cm, class_names, title, filename):
+    fig, ax = plt.subplots(figsize=(7, 7))
+
+    im = ax.imshow(cm, cmap="Blues")
+
+    ax.set_xticks(np.arange(len(class_names)))
+    ax.set_yticks(np.arange(len(class_names)))
+    ax.set_xticklabels(class_names)
+    ax.set_yticklabels(class_names)
+
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
+
+    for i in range(len(class_names)):
+        for j in range(len(class_names)):
+            ax.text(j, i, cm[i, j],
+                    ha="center",
+                    va="center",
+                    fontsize=10)
+
+    ax.set_xlabel("Predicted Label", fontsize=12)
+    ax.set_ylabel("True Label", fontsize=12)
+    ax.set_title(title, fontsize=14)
+
+    fig.tight_layout()
+
+    # save image
+    images_dir = Path("images")
+    plt.savefig(images_dir / f"{filename}.png", dpi=300)
+    plt.show()
+
 # load the model and data
 model = joblib.load(MODEL_PATH)
 X_train, y_train, class_names = load_split(DATA_DIR / "train")
@@ -43,23 +74,14 @@ X_test, y_test, _ = load_split(DATA_DIR / "test")
 train_preds = model.predict(X_train)
 test_preds = model.predict(X_test)
 
-# generate train and test confusion matrices
+# generate confusion matrices
 cm_train = confusion_matrix(y_train, train_preds)
 cm_test = confusion_matrix(y_test, test_preds)
 
-print("\nTRAIN CONFUSION MATRIX:")
-print(cm_train)
+plot_confusion_matrix(cm_train, class_names,
+                      "Confusion Matrix (Train Set)",
+                      "confusion_matrix_train")
 
-print("\nTEST CONFUSION MATRIX:")
-print(cm_test)
-
-
-print("\nPER-CLASS ACCURACY (TRAIN):")
-for i, class_name in enumerate(class_names):
-    class_acc = cm_train[i, i] / cm_train[i].sum()
-    print(f"{class_name}: {class_acc:.4f}")
-
-print("\nPER-CLASS ACCURACY (TEST):")
-for i, class_name in enumerate(class_names):
-    class_acc = cm_test[i, i] / cm_test[i].sum()
-    print(f"{class_name}: {class_acc:.4f}")
+plot_confusion_matrix(cm_test, class_names,
+                      "Confusion Matrix (Test Set)",
+                      "confusion_matrix_test")
