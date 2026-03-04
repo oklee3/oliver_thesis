@@ -8,8 +8,11 @@ test_ratio = 0.15
 val_ratio = 0.15
 random.seed(1)
 
-data_dir = Path("../data")
-categories = [d for d in data_dir.iterdir() if d.is_dir()]
+data_dir = Path("data")
+categories = [
+    d for d in data_dir.iterdir()
+    if d.is_dir() and d.name not in ["train", "val", "test"]
+]
 
 for cat in categories:
 	images = list(cat.glob("*"))

@@ -1,319 +1,283 @@
-from PIL import Image, ImageDraw
-import random, math
-import os, sys
+from PIL import Image, ImageDraw, ImageChops
+import random
+import math
+import os
+import sys
 
 # basic parameters
 IMAGE_SIZE = (128, 128)
 BACKGROUND_COLOR = (255, 255, 255)
+N_IMAGES = 10000
 
-OVERLAP_DIR = "data/overlap_triange"
-OVERLAP_BW_DIR = "data/overlap_triangle_bw"
-CIRCLE_DIR = "data/overlap_circle"
-CIRCLE_BW_DIR = "data/overlap_circle_bw"
-NO_OVERLAP_DIR = "data/no_overlap"
-NO_OVERLAP_BW_DIR = "data/no_overlap_bw"
+# output directories
+NO_OVERLAP_CIRCLE_DIR = "data/no_overlap_circle"
+NO_OVERLAP_CIRCLE_BW_DIR = "data/no_overlap_circle_bw"
+NO_OVERLAP_TRIANGLE_DIR = "data/no_overlap_triangle"
+NO_OVERLAP_TRIANGLE_BW_DIR = "data/no_overlap_triangle_bw"
+OVERLAP_CIRCLE_DIR = "data/overlap_circle"
+OVERLAP_CIRCLE_BW_DIR = "data/overlap_circle_bw"
+OVERLAP_TRIANGLE_DIR = "data/overlap_triangle"
+OVERLAP_TRIANGLE_BW_DIR = "data/overlap_triangle_bw"
 
-N_IMAGES = 1000
 
-# generate a random shape
-def random_circle():
-    radius = random.randint(8, 20)
-    x = random.randint(radius, IMAGE_SIZE[0] - radius)
-    y = random.randint(radius, IMAGE_SIZE[1] - radius)
+def random_circle(radius_min=8, radius_max=18):
+    radius = random.randint(radius_min, radius_max)
+    x = random.randint(radius + 2, IMAGE_SIZE[0] - radius - 2)
+    y = random.randint(radius + 2, IMAGE_SIZE[1] - radius - 2)
+    return {"center": (x, y), "radius": radius, "color": (0, 0, 0)}
 
-    return {
-        "center": (x, y),
-        "radius": radius,
-        "color": (0, 0, 0)
-    }
 
-def random_triangle():
-    cx = random.randint(30, 100)
-    cy = random.randint(30, 100)
-    size = random.randint(12, 25)
-
-    vertices = [
+def triangle_vertices(cx, cy, size):
+    return [
         (cx, cy - size),
         (cx - size, cy + size),
-        (cx + size, cy + size)
+        (cx + size, cy + size),
     ]
 
-    return {
-        "vertices": vertices,
-        "color": (255, 0, 0)
-    }
+
+def triangle_bounds(vertices):
+    xs = [p[0] for p in vertices]
+    ys = [p[1] for p in vertices]
+    return min(xs), min(ys), max(xs), max(ys)
 
 
-# drawing functions
 def draw_circle(draw, center, radius, color):
     x, y = center
-    draw.ellipse(
-        [x - radius, y - radius, x + radius, y + radius],
-        fill=color
-    )
+    draw.ellipse([x - radius, y - radius, x + radius, y + radius], fill=color)
+
 
 def draw_triangle(draw, vertices, color):
     draw.polygon(vertices, fill=color)
 
 
-# IMAGE GENERATING FUNCTIONS
+def in_bounds_circle(center, radius):
+    x, y = center
+    return (
+        x - radius >= 0
+        and y - radius >= 0
+        and x + radius < IMAGE_SIZE[0]
+        and y + radius < IMAGE_SIZE[1]
+    )
 
-# shapes overlapping (triangle over circle)
-def generate_overlapping_triangle(idx):
-    """
-    shapes always overlap, varying size and position
-    """
+
+def in_bounds_triangle(vertices):
+    min_x, min_y, max_x, max_y = triangle_bounds(vertices)
+    return min_x >= 0 and min_y >= 0 and max_x < IMAGE_SIZE[0] and max_y < IMAGE_SIZE[1]
+
+
+def mask_circle(center, radius):
+    mask = Image.new("1", IMAGE_SIZE, 0)
+    draw = ImageDraw.Draw(mask)
+    x, y = center
+    draw.ellipse([x - radius, y - radius, x + radius, y + radius], fill=1)
+    return mask
+
+
+def mask_triangle(vertices):
+    mask = Image.new("1", IMAGE_SIZE, 0)
+    draw = ImageDraw.Draw(mask)
+    draw.polygon(vertices, fill=1)
+    return mask
+
+
+def mask_count(mask):
+    # For mode "1", set pixels are 255 in getdata().
+    return sum(1 for px in mask.getdata() if px)
+
+
+def has_required_overlap_visibility(circle, tri, min_overlap_px=20, min_exclusive_px=20):
+    c_mask = mask_circle(circle["center"], circle["radius"])
+    t_mask = mask_triangle(tri)
+    inter = ImageChops.logical_and(c_mask, t_mask)
+
+    c_px = mask_count(c_mask)
+    t_px = mask_count(t_mask)
+    i_px = mask_count(inter)
+    c_only = c_px - i_px
+    t_only = t_px - i_px
+
+    return i_px >= min_overlap_px and c_only >= min_exclusive_px and t_only >= min_exclusive_px
+
+
+def placement_non_overlap(above="circle"):
+    # Build shapes around same x-range while controlling vertical gap.
+    for _ in range(500):
+        radius = random.randint(8, 16)
+        size = random.randint(8, 16)
+
+        cx = random.randint(radius + 2, IMAGE_SIZE[0] - radius - 2)
+        tx = random.randint(size + 2, IMAGE_SIZE[0] - size - 2)
+
+        # Re-center horizontally a bit so they are both visible and near each other.
+        mid_x = (cx + tx) // 2
+        cx = max(radius + 2, min(IMAGE_SIZE[0] - radius - 2, mid_x + random.randint(-6, 6)))
+        tx = max(size + 2, min(IMAGE_SIZE[0] - size - 2, mid_x + random.randint(-6, 6)))
+
+        if above == "circle":
+            # Circle strictly above triangle with guaranteed vertical gap.
+            circle_top = random.randint(2, 32)
+            cy = circle_top + radius
+
+            tri_top_min = cy + radius + 8
+            tri_top_max = IMAGE_SIZE[1] - (2 * size) - 2
+            if tri_top_min > tri_top_max:
+                continue
+            tri_top = random.randint(tri_top_min, tri_top_max)
+            ty = tri_top + size
+        else:
+            # Triangle strictly above circle with guaranteed vertical gap.
+            tri_top = random.randint(2, 26)
+            ty = tri_top + size
+
+            circle_top_min = ty + size + 8
+            circle_top_max = IMAGE_SIZE[1] - (2 * radius) - 2
+            if circle_top_min > circle_top_max:
+                continue
+            circle_top = random.randint(circle_top_min, circle_top_max)
+            cy = circle_top + radius
+
+        circle = {"center": (cx, cy), "radius": radius}
+        tri = triangle_vertices(tx, ty, size)
+
+        if not in_bounds_circle(circle["center"], circle["radius"]):
+            continue
+        if not in_bounds_triangle(tri):
+            continue
+
+        return circle, tri
+
+    raise RuntimeError("Could not place non-overlapping shapes")
+
+
+def placement_overlap(above="circle"):
+    # Force overlap by anchoring both shapes around a shared point.
+    for _ in range(5000):
+        radius = random.randint(10, 16)
+        size = random.randint(10, 16)
+
+        margin = max(radius, size) + 10
+        anchor_x = random.randint(margin, IMAGE_SIZE[0] - margin)
+        anchor_y = random.randint(margin, IMAGE_SIZE[1] - margin)
+
+        x_jitter = random.randint(-3, 3)
+        if above == "circle":
+            # Circle centroid above triangle centroid.
+            cx = anchor_x + x_jitter
+            cy = anchor_y - random.randint(1, 4)
+            tx = anchor_x - x_jitter
+            ty = anchor_y + random.randint(1, 4)
+        else:
+            # Triangle centroid above circle centroid.
+            tx = anchor_x + x_jitter
+            ty = anchor_y - random.randint(1, 4)
+            cx = anchor_x - x_jitter
+            cy = anchor_y + random.randint(1, 4)
+
+        tri = triangle_vertices(tx, ty, size)
+        circle = {"center": (cx, cy), "radius": radius}
+
+        if not in_bounds_circle(circle["center"], circle["radius"]):
+            continue
+        if not in_bounds_triangle(tri):
+            continue
+
+        # Ensure at least partial vertical ordering ("above") via centroid.
+        if above == "circle" and not (cy <= ty):
+            continue
+        if above == "triangle" and not (ty <= cy):
+            continue
+
+        if not has_required_overlap_visibility(circle, tri):
+            continue
+
+        return circle, tri
+
+    raise RuntimeError("Could not place overlapping shapes")
+
+
+def save_image(path, filename, circle, triangle, circle_color, tri_color, top_shape):
     img = Image.new("RGB", IMAGE_SIZE, BACKGROUND_COLOR)
     draw = ImageDraw.Draw(img)
 
-    circle = random_circle()
+    if top_shape == "circle":
+        draw_triangle(draw, triangle, tri_color)
+        draw_circle(draw, circle["center"], circle["radius"], circle_color)
+    else:
+        draw_circle(draw, circle["center"], circle["radius"], circle_color)
+        draw_triangle(draw, triangle, tri_color)
 
-    cx, cy = circle["center"]
-    size = circle["radius"] 
+    img.save(os.path.join(path, filename))
 
-    max_offset = size // 2
-    dx = random.randint(-max_offset, max_offset)
-    dy = random.randint(-max_offset, max_offset)
-    tx = cx + dx
-    ty = cy + dy
 
-    vertices = [
-        (tx, ty - size),
-        (tx - size, ty + size),
-        (tx + size, ty + size)
-    ]
-
-    triangle = {
-        "vertices": vertices,
-        "color": (255, 0, 0)
-    }
-
-    draw_circle(draw, circle["center"], circle["radius"], circle["color"])
-    draw_triangle(draw, triangle["vertices"], triangle["color"])
-
-    filename = f"overlap_{idx:04d}.png"
-    img.save(os.path.join(OVERLAP_DIR, filename))
-
-# triangle over circle, black and white
-def generate_overlapping_triangle_bw(idx):
-    """
-    same as above, no color
-    """
-    img = Image.new("RGB", IMAGE_SIZE, BACKGROUND_COLOR)
-    draw = ImageDraw.Draw(img)
-
-    circle = random_circle()
-
-    cx, cy = circle["center"]
-    size = circle["radius"] 
-
-    max_offset = size // 2
-    dx = random.randint(-max_offset, max_offset)
-    dy = random.randint(-max_offset, max_offset)
-    tx = cx + dx
-    ty = cy + dy
-
-    vertices = [
-        (tx, ty - size),
-        (tx - size, ty + size),
-        (tx + size, ty + size)
-    ]
-
-    triangle = {
-        "vertices": vertices,
-        "color": (0, 0, 0)
-    }
-
-    draw_circle(draw, circle["center"], circle["radius"], circle["color"])
-    draw_triangle(draw, triangle["vertices"], triangle["color"])
-
-    filename = f"overlap_{idx:04d}.png"
-    img.save(os.path.join(OVERLAP_BW_DIR, filename))
-
-# circle over triangle
-def generate_overlapping_circle(idx):
-    """
-    circle drawn over triangle, varying size and position
-    """
-    img = Image.new("RGB", IMAGE_SIZE, BACKGROUND_COLOR)
-    draw = ImageDraw.Draw(img)
-
-    circle = random_circle()
-
-    cx, cy = circle["center"]
-    size = circle["radius"]
-
-    max_offset = size // 2
-    dx = random.randint(-max_offset, max_offset)
-    dy = random.randint(-max_offset, max_offset)
-    tx = cx + dx
-    ty = cy + dy
-
-    vertices = [
-        (tx, ty - size),
-        (tx - size, ty + size),
-        (tx + size, ty + size)
-    ]
-
-    triangle = {
-        "vertices": vertices,
-        "color": (255, 0, 0)
-    }
-
-    # draw triangle first
-    draw_triangle(draw, triangle["vertices"], triangle["color"])
-    # circle on top
-    draw_circle(draw, circle["center"], circle["radius"], circle["color"])
-
-    filename = f"overlap_{idx:04d}.png"
-    img.save(os.path.join(CIRCLE_DIR, filename))
-
-# circle over triangle, black and white
-def generate_overlapping_circle_bw(idx):
-    """
-    circle over triangle, no color
-    """
-    img = Image.new("RGB", IMAGE_SIZE, BACKGROUND_COLOR)
-    draw = ImageDraw.Draw(img)
-
-    circle = random_circle()
-    circle["color"] = (0, 0, 0)
-
-    cx, cy = circle["center"]
-    size = circle["radius"]
-
-    max_offset = size // 2
-    dx = random.randint(-max_offset, max_offset)
-    dy = random.randint(-max_offset, max_offset)
-    tx = cx + dx
-    ty = cy + dy
-
-    vertices = [
-        (tx, ty - size),
-        (tx - size, ty + size),
-        (tx + size, ty + size)
-    ]
-
-    triangle = {
-        "vertices": vertices,
-        "color": (0, 0, 0)
-    }
-
-    draw_triangle(draw, triangle["vertices"], triangle["color"])
-    draw_circle(draw, circle["center"], circle["radius"], circle["color"])
-
-    filename = f"overlap_{idx:04d}.png"
-    img.save(os.path.join(CIRCLE_BW_DIR, filename))
-
-# not overlapping
-def generate_not_overlapping(idx):
-    """
-    shapes do not overlap
-    """
-    img = Image.new("RGB", IMAGE_SIZE, BACKGROUND_COLOR)
-    draw = ImageDraw.Draw(img)
-
-    circle = random_circle()
-
-    cx, cy = circle["center"]
-    size = circle["radius"]
-
-    # push triangle far enough away
-    min_distance = size * 3
-
-    angle = random.uniform(0, 2 * 3.14159)
-    tx = int(cx + min_distance * math.cos(angle))
-    ty = int(cy + min_distance * math.sin(angle))
-
-    vertices = [
-        (tx, ty - size),
-        (tx - size, ty + size),
-        (tx + size, ty + size)
-    ]
-
-    triangle = {
-        "vertices": vertices,
-        "color": (255, 0, 0)
-    }
-
-    draw_circle(draw, circle["center"], circle["radius"], circle["color"])
-    draw_triangle(draw, triangle["vertices"], triangle["color"])
-
+def generate_no_overlap_circle(idx, bw=False):
+    circle, tri = placement_non_overlap(above="circle")
+    c = (0, 0, 0)
+    t = (0, 0, 0) if bw else (255, 0, 0)
     filename = f"no_overlap_{idx:04d}.png"
-    img.save(os.path.join(NO_OVERLAP_DIR, filename))
+    outdir = NO_OVERLAP_CIRCLE_BW_DIR if bw else NO_OVERLAP_CIRCLE_DIR
+    save_image(outdir, filename, circle, tri, c, t, top_shape="circle")
 
-# not overlapping, black and white
-def generate_not_overlapping_bw(idx):
-    """
-    shapes do not overlap, no color
-    """
-    img = Image.new("RGB", IMAGE_SIZE, BACKGROUND_COLOR)
-    draw = ImageDraw.Draw(img)
 
-    circle = random_circle()
-    circle["color"] = (0, 0, 0)
+def generate_no_overlap_triangle(idx, bw=False):
+    circle, tri = placement_non_overlap(above="triangle")
+    c = (0, 0, 0)
+    t = (0, 0, 0) if bw else (255, 0, 0)
+    filename = f"no_overlap_{idx:04d}.png"
+    outdir = NO_OVERLAP_TRIANGLE_BW_DIR if bw else NO_OVERLAP_TRIANGLE_DIR
+    save_image(outdir, filename, circle, tri, c, t, top_shape="triangle")
 
-    cx, cy = circle["center"]
-    size = circle["radius"]
 
-    min_distance = size * 3
+def generate_overlap_circle(idx, bw=False):
+    circle, tri = placement_overlap(above="circle")
+    c = (0, 0, 0)
+    t = (0, 0, 0) if bw else (255, 0, 0)
+    filename = f"overlap_{idx:04d}.png"
+    outdir = OVERLAP_CIRCLE_BW_DIR if bw else OVERLAP_CIRCLE_DIR
+    save_image(outdir, filename, circle, tri, c, t, top_shape="circle")
 
-    angle = random.uniform(0, 2 * 3.14159)
-    tx = int(cx + min_distance * math.cos(angle))
-    ty = int(cy + min_distance * math.sin(angle))
 
-    vertices = [
-        (tx, ty - size),
-        (tx - size, ty + size),
-        (tx + size, ty + size)
-    ]
+def generate_overlap_triangle(idx, bw=False):
+    circle, tri = placement_overlap(above="triangle")
+    c = (0, 0, 0)
+    t = (0, 0, 0) if bw else (255, 0, 0)
+    filename = f"overlap_{idx:04d}.png"
+    outdir = OVERLAP_TRIANGLE_BW_DIR if bw else OVERLAP_TRIANGLE_DIR
+    save_image(outdir, filename, circle, tri, c, t, top_shape="triangle")
 
-    triangle = {
-        "vertices": vertices,
-        "color": (0, 0, 0)
+
+def generate_dataset(mode):
+    mapping = {
+        "no_overlap_circle": (NO_OVERLAP_CIRCLE_DIR, lambda i: generate_no_overlap_circle(i, bw=False)),
+        "no_overlap_circle_bw": (NO_OVERLAP_CIRCLE_BW_DIR, lambda i: generate_no_overlap_circle(i, bw=True)),
+        "no_overlap_triangle": (NO_OVERLAP_TRIANGLE_DIR, lambda i: generate_no_overlap_triangle(i, bw=False)),
+        "no_overlap_triangle_bw": (NO_OVERLAP_TRIANGLE_BW_DIR, lambda i: generate_no_overlap_triangle(i, bw=True)),
+        "overlap_circle": (OVERLAP_CIRCLE_DIR, lambda i: generate_overlap_circle(i, bw=False)),
+        "overlap_circle_bw": (OVERLAP_CIRCLE_BW_DIR, lambda i: generate_overlap_circle(i, bw=True)),
+        "overlap_triangle": (OVERLAP_TRIANGLE_DIR, lambda i: generate_overlap_triangle(i, bw=False)),
+        "overlap_triangle_bw": (OVERLAP_TRIANGLE_BW_DIR, lambda i: generate_overlap_triangle(i, bw=True)),
     }
 
-    draw_circle(draw, circle["center"], circle["radius"], circle["color"])
-    draw_triangle(draw, triangle["vertices"], triangle["color"])
+    if mode not in mapping:
+        print(
+            "Usage: python3 test_script.py [no_overlap_circle|no_overlap_circle_bw|"
+            "no_overlap_triangle|no_overlap_triangle_bw|overlap_circle|"
+            "overlap_circle_bw|overlap_triangle|overlap_triangle_bw]"
+        )
+        sys.exit(1)
 
-    filename = f"no_overlap_{idx:04d}.png"
-    img.save(os.path.join(NO_OVERLAP_BW_DIR, filename))
+    outdir, fn = mapping[mode]
+    os.makedirs(outdir, exist_ok=True)
+    for i in range(N_IMAGES):
+        fn(i)
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python3 test_script.py [overlap]")
+        print(
+            "Usage: python3 test_script.py [no_overlap_circle|no_overlap_circle_bw|"
+            "no_overlap_triangle|no_overlap_triangle_bw|overlap_circle|"
+            "overlap_circle_bw|overlap_triangle|overlap_triangle_bw]"
+        )
         sys.exit(1)
 
-    mode = sys.argv[1]
-
-    if mode == "overlap_triangle":
-        os.makedirs(OVERLAP_DIR, exist_ok=True)
-        for i in range(N_IMAGES):
-            generate_overlapping_triangle(i)
-
-    if mode == "overlap_triangle_bw":
-        os.makedirs(OVERLAP_BW_DIR, exist_ok=True)
-        for i in range(N_IMAGES):
-            generate_overlapping_triangle_bw(i)
-
-    if mode == "overlap_circle":
-        os.makedirs(CIRCLE_DIR, exist_ok=True)
-        for i in range(N_IMAGES):
-            generate_overlapping_circle(i)
-
-    if mode == "overlap_circle_bw":
-        os.makedirs(CIRCLE_BW_DIR, exist_ok=True)
-        for i in range(N_IMAGES):
-            generate_overlapping_circle_bw(i)
-
-    if mode == "no_overlap":
-        os.makedirs(NO_OVERLAP_DIR, exist_ok=True)
-        for i in range(N_IMAGES):
-            generate_not_overlapping(i)
-
-    if mode == "no_overlap_bw":
-        os.makedirs(NO_OVERLAP_BW_DIR, exist_ok=True)
-        for i in range(N_IMAGES):
-            generate_not_overlapping_bw(i)
-    
+    generate_dataset(sys.argv[1])
