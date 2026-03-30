@@ -8,7 +8,7 @@ import sys
 IMAGE_SIZE = (128, 128)
 BACKGROUND_COLOR = (0, 0, 0)
 PRIMARY_SHAPE_COLOR = (255, 255, 255)
-N_IMAGES = 100000
+N_IMAGES = 10000
 
 # output directories
 NO_OVERLAP_CIRCLE_DIR = "data/no_overlap_circle"

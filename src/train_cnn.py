@@ -317,10 +317,10 @@ def train_one_pair(run_name: str, class_names: Sequence[str], cfg: TrainConfig, 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", type=int, default=40)
+    parser.add_argument("--epochs", type=int, default=25)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--seed", type=int, default=1)
     args = parser.parse_args()
 
     set_seed(args.seed)
