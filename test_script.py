@@ -6,8 +6,9 @@ import sys
 
 # basic parameters
 IMAGE_SIZE = (128, 128)
-BACKGROUND_COLOR = (255, 255, 255)
-N_IMAGES = 10000
+BACKGROUND_COLOR = (0, 0, 0)
+PRIMARY_SHAPE_COLOR = (255, 255, 255)
+N_IMAGES = 100000
 
 # output directories
 NO_OVERLAP_CIRCLE_DIR = "data/no_overlap_circle"
@@ -24,7 +25,7 @@ def random_circle(radius_min=8, radius_max=18):
     radius = random.randint(radius_min, radius_max)
     x = random.randint(radius + 2, IMAGE_SIZE[0] - radius - 2)
     y = random.randint(radius + 2, IMAGE_SIZE[1] - radius - 2)
-    return {"center": (x, y), "radius": radius, "color": (0, 0, 0)}
+    return {"center": (x, y), "radius": radius, "color": PRIMARY_SHAPE_COLOR}
 
 
 def triangle_vertices(cx, cy, size):
@@ -211,8 +212,8 @@ def save_image(path, filename, circle, triangle, circle_color, tri_color, top_sh
 
 def generate_no_overlap_circle(idx, bw=False):
     circle, tri = placement_non_overlap(above="circle")
-    c = (0, 0, 0)
-    t = (0, 0, 0) if bw else (255, 0, 0)
+    c = PRIMARY_SHAPE_COLOR
+    t = PRIMARY_SHAPE_COLOR if bw else (255, 0, 0)
     filename = f"no_overlap_{idx:04d}.png"
     outdir = NO_OVERLAP_CIRCLE_BW_DIR if bw else NO_OVERLAP_CIRCLE_DIR
     save_image(outdir, filename, circle, tri, c, t, top_shape="circle")
@@ -220,8 +221,8 @@ def generate_no_overlap_circle(idx, bw=False):
 
 def generate_no_overlap_triangle(idx, bw=False):
     circle, tri = placement_non_overlap(above="triangle")
-    c = (0, 0, 0)
-    t = (0, 0, 0) if bw else (255, 0, 0)
+    c = PRIMARY_SHAPE_COLOR
+    t = PRIMARY_SHAPE_COLOR if bw else (255, 0, 0)
     filename = f"no_overlap_{idx:04d}.png"
     outdir = NO_OVERLAP_TRIANGLE_BW_DIR if bw else NO_OVERLAP_TRIANGLE_DIR
     save_image(outdir, filename, circle, tri, c, t, top_shape="triangle")
@@ -229,8 +230,8 @@ def generate_no_overlap_triangle(idx, bw=False):
 
 def generate_overlap_circle(idx, bw=False):
     circle, tri = placement_overlap(above="circle")
-    c = (0, 0, 0)
-    t = (0, 0, 0) if bw else (255, 0, 0)
+    c = PRIMARY_SHAPE_COLOR
+    t = PRIMARY_SHAPE_COLOR if bw else (255, 0, 0)
     filename = f"overlap_{idx:04d}.png"
     outdir = OVERLAP_CIRCLE_BW_DIR if bw else OVERLAP_CIRCLE_DIR
     save_image(outdir, filename, circle, tri, c, t, top_shape="circle")
@@ -238,8 +239,8 @@ def generate_overlap_circle(idx, bw=False):
 
 def generate_overlap_triangle(idx, bw=False):
     circle, tri = placement_overlap(above="triangle")
-    c = (0, 0, 0)
-    t = (0, 0, 0) if bw else (255, 0, 0)
+    c = PRIMARY_SHAPE_COLOR
+    t = PRIMARY_SHAPE_COLOR if bw else (255, 0, 0)
     filename = f"overlap_{idx:04d}.png"
     outdir = OVERLAP_TRIANGLE_BW_DIR if bw else OVERLAP_TRIANGLE_DIR
     save_image(outdir, filename, circle, tri, c, t, top_shape="triangle")
