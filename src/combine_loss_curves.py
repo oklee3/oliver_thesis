@@ -11,10 +11,10 @@ RUN_ORDER = ["no_overlap", "no_overlap_bw", "overlap", "overlap_bw"]
 def default_curve_paths(model_name: str) -> Dict[str, str]:
     return {
         run_name: os.path.join(
-            "images",
+            "outline_images",
             model_name,
             "loss_curves",
-            f"{model_name}_{run_name}_loss_curve.png",
+            f"{model_name}_{run_name}_outline_loss_curve.png",
         )
         for run_name in RUN_ORDER
     }
@@ -52,7 +52,7 @@ def combine_images(model_name: str, out_path: str, run_order: Sequence[str]) -> 
         "white",
     )
     draw = ImageDraw.Draw(canvas)
-    title = f"{model_name.upper()} Loss Curves"
+    title = f"{model_name.upper()} Outline Loss Curves"
     draw.text((padding, 15), title, fill="black")
 
     for idx, run_name in enumerate(run_order):
@@ -81,7 +81,7 @@ def main():
     args = parser.parse_args()
 
     for model_name in args.models:
-        out_path = os.path.join("images", model_name, f"{model_name}_loss_curves_grid.png")
+        out_path = os.path.join("outline_images", model_name, f"{model_name}_outline_loss_curves_grid.png")
         saved_path = combine_images(model_name, out_path, RUN_ORDER)
         print(f"Saved {saved_path}")
 

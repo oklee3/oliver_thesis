@@ -8,7 +8,7 @@ test_ratio = 0.15
 val_ratio = 0.15
 random.seed(1)
 
-data_dir = Path("data")
+data_dir = Path("outline_data")
 categories = [
     d for d in data_dir.iterdir()
     if d.is_dir() and d.name not in ["train", "val", "test"]

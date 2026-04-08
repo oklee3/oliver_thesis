@@ -113,16 +113,16 @@ def evaluate_model_family(
                 }
             )
 
-    heatmap_path = os.path.join(image_dir, f"{model_name}_category_pair_heatmap.png")
+    heatmap_path = os.path.join(image_dir, f"{model_name}_outline_category_pair_heatmap.png")
     save_heatmap(
         matrix,
         row_labels=pair_names,
         col_labels=pair_names,
         out_path=heatmap_path,
-        title=f"{model_name.upper()} Train/Test Pair Accuracy",
+        title=f"{model_name.upper()} Outline Train/Test Pair Accuracy",
     )
 
-    summary_path = os.path.join(model_dir, "category_pair_heatmap_results.json")
+    summary_path = os.path.join(model_dir, "outline_category_pair_heatmap_results.json")
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(
             {

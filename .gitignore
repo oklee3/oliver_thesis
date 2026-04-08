@@ -1,5 +1,7 @@
 data
+outline_data
 models
+outline_models
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

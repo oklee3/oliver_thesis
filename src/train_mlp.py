@@ -17,9 +17,9 @@ from torch.utils.data import DataLoader, Dataset
 
 
 IMAGE_SIZE = (128, 128)
-DATA_ROOT = "data"
-MODEL_DIR = "models/mlp"
-IMAGE_DIR = "images/mlp"
+DATA_ROOT = "outline_data"
+MODEL_DIR = "outline_models/mlp"
+IMAGE_DIR = "outline_images/mlp"
 EXPECTED_NUM_CLASSES = 8
 PAIR_RUNS = [
     ("no_overlap", ["no_overlap_circle", "no_overlap_triangle"]),
@@ -256,8 +256,8 @@ def train_one_pair(run_name: str, class_names: Sequence[str], cfg: TrainConfig, 
     assert best_state is not None
     model.load_state_dict(best_state)
 
-    loss_curve_path = os.path.join(IMAGE_DIR, "loss_curves", f"mlp_{run_name}_loss_curve.png")
-    save_loss_curve(history, loss_curve_path, title=f"MLP Loss Curve - {run_name}")
+    loss_curve_path = os.path.join(IMAGE_DIR, "loss_curves", f"mlp_{run_name}_outline_loss_curve.png")
+    save_loss_curve(history, loss_curve_path, title=f"MLP Outline Loss Curve - {run_name}")
 
     test_loss, test_acc, per_class_acc = evaluate(
         model,
@@ -310,7 +310,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=25)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     set_seed(args.seed)
