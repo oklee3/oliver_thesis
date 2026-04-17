@@ -1,6 +1,6 @@
 """
-Evaluate each saved train-pair model against every paired test split and render
-train-pair vs. test-pair heatmaps.
+Evaluate each saved train-pair model against every individual test category and
+render train-pair vs. test-category heatmaps.
 """
 import argparse
 import json
@@ -20,6 +20,7 @@ from train_cnn import (
     PAIR_RUNS,
     collect_items as collect_cnn_items,
     evaluate as evaluate_cnn,
+    list_split_classes as list_cnn_split_classes,
 )
 from train_mlp import (
     IMAGE_DIR as MLP_IMAGE_DIR,
@@ -27,6 +28,7 @@ from train_mlp import (
     MLPClassifier,
     collect_items as collect_mlp_items,
     evaluate as evaluate_mlp,
+    list_split_classes as list_mlp_split_classes,
 )
 
 
@@ -43,7 +45,9 @@ def save_heatmap(
     out_path: str,
     title: str,
 ):
-    fig, ax = plt.subplots(figsize=(8.0, 6.0), dpi=180)
+    fig_width = max(10.0, 1.2 * len(col_labels) + 3.0)
+    fig_height = max(5.0, 1.0 * len(row_labels) + 2.0)
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=180)
     sns.heatmap(
         matrix,
         annot=True,
@@ -56,7 +60,7 @@ def save_heatmap(
         cbar_kws={"label": "Accuracy"},
         ax=ax,
     )
-    ax.set_xlabel("Test Pair")
+    ax.set_xlabel("Test Category")
     ax.set_ylabel("Train Pair")
     ax.set_title(title, pad=10)
 
@@ -73,30 +77,33 @@ def evaluate_model_family(
     model_cls,
     collect_items_fn,
     evaluate_fn,
+    list_split_classes_fn,
     batch_size: int,
     device: torch.device,
+    run_index: int,
 ) -> Tuple[np.ndarray, List[Dict]]:
     pair_names = [run_name for run_name, _ in PAIR_RUNS]
-    matrix = np.zeros((len(pair_names), len(pair_names)), dtype=np.float32)
+    test_categories = list_split_classes_fn(os.path.join(DATA_ROOT, "test"))
+    matrix = np.zeros((len(pair_names), len(test_categories)), dtype=np.float32)
     details: List[Dict] = []
 
-    test_items_by_pair = {
-        run_name: collect_items_fn(os.path.join(DATA_ROOT, "test"), class_names)
-        for run_name, class_names in PAIR_RUNS
+    test_items_by_category = {
+        class_name: collect_items_fn(os.path.join(DATA_ROOT, "test"), [class_name])
+        for class_name in test_categories
     }
 
     for train_idx, (train_pair_name, train_classes) in enumerate(PAIR_RUNS):
-        checkpoint_path = os.path.join(model_dir, f"{model_name}_{train_pair_name}.pt")
+        checkpoint_path = os.path.join(model_dir, f"{model_name}_{train_pair_name}_run{run_index}.pt")
         checkpoint = load_checkpoint(checkpoint_path, device)
 
         model = model_cls().to(device)
         model.load_state_dict(checkpoint["state_dict"])
         model.eval()
 
-        for test_idx, (test_pair_name, _test_classes) in enumerate(PAIR_RUNS):
+        for test_idx, test_category in enumerate(test_categories):
             _loss, test_acc, per_class_acc = evaluate_fn(
                 model,
-                test_items_by_pair[test_pair_name],
+                test_items_by_category[test_category],
                 device,
                 batch_size,
             )
@@ -104,30 +111,33 @@ def evaluate_model_family(
             details.append(
                 {
                     "model_type": model_name,
+                    "run_index": run_index,
                     "train_pair": train_pair_name,
                     "train_classes": list(train_classes),
-                    "test_pair": test_pair_name,
+                    "test_category": test_category,
                     "test_acc": test_acc,
                     "test_per_class_acc": per_class_acc,
                     "checkpoint_path": checkpoint_path,
                 }
             )
 
-    heatmap_path = os.path.join(image_dir, f"{model_name}_outline_category_pair_heatmap.png")
+    heatmap_path = os.path.join(image_dir, f"{model_name}_outline_category_heatmap_run{run_index}.png")
     save_heatmap(
         matrix,
         row_labels=pair_names,
-        col_labels=pair_names,
+        col_labels=test_categories,
         out_path=heatmap_path,
-        title=f"{model_name.upper()} Outline Train/Test Pair Accuracy",
+        title=f"{model_name.upper()} Outline Train Pair vs Test Category Accuracy (Run {run_index})",
     )
 
-    summary_path = os.path.join(model_dir, "outline_category_pair_heatmap_results.json")
+    summary_path = os.path.join(model_dir, f"outline_category_heatmap_results_run{run_index}.json")
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(
             {
                 "model_type": model_name,
+                "run_index": run_index,
                 "pair_names": pair_names,
+                "test_categories": test_categories,
                 "accuracy_matrix": matrix.tolist(),
                 "heatmap_path": heatmap_path,
                 "results": details,
@@ -142,6 +152,7 @@ def evaluate_model_family(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--run-index", type=int, default=1)
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -153,8 +164,10 @@ def main():
         model_cls=CNNClassifier,
         collect_items_fn=collect_cnn_items,
         evaluate_fn=evaluate_cnn,
+        list_split_classes_fn=list_cnn_split_classes,
         batch_size=args.batch_size,
         device=device,
+        run_index=args.run_index,
     )
     mlp_matrix, _ = evaluate_model_family(
         model_name="mlp",
@@ -163,8 +176,10 @@ def main():
         model_cls=MLPClassifier,
         collect_items_fn=collect_mlp_items,
         evaluate_fn=evaluate_mlp,
+        list_split_classes_fn=list_mlp_split_classes,
         batch_size=args.batch_size,
         device=device,
+        run_index=args.run_index,
     )
 
     print(
