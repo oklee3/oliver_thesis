@@ -222,14 +222,15 @@ def save_loss_curve(
     title: str,
 ):
     epochs = np.arange(1, len(history["train_loss"]) + 1)
-    fig, ax = plt.subplots(figsize=(7.2, 5.0), dpi=180)
-    ax.plot(epochs, history["train_loss"], label="Train Loss", linewidth=2.0)
-    ax.plot(epochs, history["val_loss"], label="Val Loss", linewidth=2.0)
-    ax.set_xlabel("Epoch", fontsize=10)
-    ax.set_ylabel("Loss", fontsize=10)
-    ax.set_title(title, fontsize=12, pad=10)
-    ax.grid(alpha=0.25)
-    ax.legend()
+    with plt.style.context("ggplot"):
+        fig, ax = plt.subplots(figsize=(7.2, 5.0), dpi=180)
+        ax.plot(epochs, history["train_loss"], label="Train Loss", linewidth=2.0)
+        ax.plot(epochs, history["val_loss"], label="Val Loss", linewidth=2.0)
+        ax.set_xlabel("Epoch", fontsize=10)
+        ax.set_ylabel("Loss", fontsize=10)
+        ax.set_title(title, fontsize=12, pad=10)
+        ax.grid(alpha=0.25)
+        ax.legend()
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     fig.tight_layout()
@@ -237,21 +238,43 @@ def save_loss_curve(
     plt.close(fig)
 
 
-def loss_curve_path_for(dataset_cfg: DatasetConfig, pair_name: str, run_index: int) -> str:
+def artifact_tag(run_index: Optional[int] = None, artifact_label: Optional[str] = None) -> str:
+    if artifact_label:
+        return artifact_label
+    if run_index is None:
+        raise ValueError("Either run_index or artifact_label must be provided.")
+    return f"run{run_index}"
+
+
+def artifact_display_name(run_index: Optional[int] = None, artifact_label: Optional[str] = None) -> str:
+    if artifact_label:
+        return artifact_label
+    if run_index is None:
+        raise ValueError("Either run_index or artifact_label must be provided.")
+    return f"Run {run_index}"
+
+
+def loss_curve_path_for(
+    dataset_cfg: DatasetConfig,
+    pair_name: str,
+    run_index: Optional[int] = None,
+    artifact_label: Optional[str] = None,
+) -> str:
     return os.path.join(
         dataset_cfg.image_dir,
         "loss_curves",
-        f"mlp_{pair_name}_run{run_index}_loss_curve.png",
+        f"mlp_{pair_name}_{artifact_tag(run_index, artifact_label)}_loss_curve.png",
     )
 
 
 def combine_dataset_loss_curves(
     dataset_cfg: DatasetConfig,
-    run_index: int,
+    run_index: Optional[int],
     run_order: Sequence[str],
+    artifact_label: Optional[str] = None,
 ) -> str:
     curve_paths = {
-        run_name: loss_curve_path_for(dataset_cfg, run_name, run_index)
+        run_name: loss_curve_path_for(dataset_cfg, run_name, run_index, artifact_label)
         for run_name in run_order
     }
     images: Dict[str, Image.Image] = {}
@@ -278,7 +301,11 @@ def combine_dataset_loss_curves(
         "white",
     )
     draw = ImageDraw.Draw(canvas)
-    draw.text((padding, 15), f"MLP {dataset_cfg.title_label} Loss Curves - Run {run_index}", fill="black")
+    draw.text(
+        (padding, 15),
+        f"MLP {dataset_cfg.title_label} Loss Curves - {artifact_display_name(run_index, artifact_label)}",
+        fill="black",
+    )
 
     for idx, run_name in enumerate(run_order):
         row, col = divmod(idx, 2)
@@ -291,7 +318,7 @@ def combine_dataset_loss_curves(
 
     out_path = os.path.join(
         dataset_cfg.image_dir,
-        f"mlp_{dataset_cfg.name}_loss_curves_run{run_index}_grid.png",
+        f"mlp_{dataset_cfg.name}_loss_curves_{artifact_tag(run_index, artifact_label)}_grid.png",
     )
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     canvas.save(out_path)
@@ -304,9 +331,11 @@ def train_one_pair(
     class_names: Sequence[str],
     cfg: TrainConfig,
     device: torch.device,
-    run_index: int,
+    run_index: Optional[int] = None,
+    artifact_label: Optional[str] = None,
 ):
-    print(f"[MLP][{dataset_cfg.name}][{pair_name}][run {run_index}] Starting training...")
+    display_name = artifact_display_name(run_index, artifact_label)
+    print(f"[MLP][{dataset_cfg.name}][{pair_name}][{display_name}] Starting training...")
     train_items = collect_items(os.path.join(dataset_cfg.data_root, "train"), class_names)
     val_items = collect_items(os.path.join(dataset_cfg.data_root, "val"), class_names)
     test_items = collect_items(os.path.join(dataset_cfg.data_root, "test"), class_names)
@@ -342,7 +371,7 @@ def train_one_pair(
             example_count += y.numel()
             if batch_idx == 1 or batch_idx % progress_interval == 0 or batch_idx == len(train_dl):
                 print(
-                    f"[MLP][{dataset_cfg.name}][{pair_name}][run {run_index}] "
+                    f"[MLP][{dataset_cfg.name}][{pair_name}][{display_name}] "
                     f"Epoch {epoch + 1}/{cfg.epochs} "
                     f"batch {batch_idx}/{len(train_dl)} "
                     f"loss={loss.item():.4f}",
@@ -354,25 +383,25 @@ def train_one_pair(
         history["train_loss"].append(avg_loss)
         history["val_loss"].append(val_loss)
         print(
-            f"[MLP][{dataset_cfg.name}][{pair_name}][run {run_index}] Epoch {epoch + 1}/{cfg.epochs} "
+            f"[MLP][{dataset_cfg.name}][{pair_name}][{display_name}] Epoch {epoch + 1}/{cfg.epochs} "
             f"train_loss={avg_loss:.4f} val_loss={val_loss:.4f} val_acc={val_acc:.4f}"
         )
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
             print(
-                f"[MLP][{dataset_cfg.name}][{pair_name}][run {run_index}] "
+                f"[MLP][{dataset_cfg.name}][{pair_name}][{display_name}] "
                 f"New best val_loss={best_val_loss:.4f}"
             )
 
     assert best_state is not None
     model.load_state_dict(best_state)
 
-    loss_curve_path = loss_curve_path_for(dataset_cfg, pair_name, run_index)
+    loss_curve_path = loss_curve_path_for(dataset_cfg, pair_name, run_index, artifact_label)
     save_loss_curve(
         history,
         loss_curve_path,
-        title=f"MLP {dataset_cfg.title_label} Loss Curve - {pair_name} (Run {run_index})",
+        title=f"MLP {dataset_cfg.title_label} Loss Curve - {pair_name} ({display_name})",
     )
 
     test_loss, test_acc, per_class_acc = evaluate(
@@ -384,7 +413,10 @@ def train_one_pair(
     )
 
     os.makedirs(dataset_cfg.model_dir, exist_ok=True)
-    model_path = os.path.join(dataset_cfg.model_dir, f"mlp_{pair_name}_run{run_index}.pt")
+    model_path = os.path.join(
+        dataset_cfg.model_dir,
+        f"mlp_{pair_name}_{artifact_tag(run_index, artifact_label)}.pt",
+    )
     torch.save(
         {
             "model_type": "MLPClassifier",
@@ -393,6 +425,7 @@ def train_one_pair(
             "data_layout": "train_val_test_folders",
             "pair_name": pair_name,
             "run_index": run_index,
+            "artifact_label": artifact_label,
             "train_classes": list(class_names),
             "state_dict": model.state_dict(),
             "best_val_loss": best_val_loss,
@@ -410,6 +443,7 @@ def train_one_pair(
     return {
         "pair_name": pair_name,
         "run_index": run_index,
+        "artifact_label": artifact_label,
         "dataset_name": dataset_cfg.name,
         "data_root": dataset_cfg.data_root,
         "train_classes": list(class_names),
@@ -433,8 +467,14 @@ def main():
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--num-runs", type=int, default=3)
+    parser.add_argument("--num-runs", type=int, default=1)
     parser.add_argument("--start-run-index", type=int, default=1)
+    parser.add_argument(
+        "--artifact-label",
+        type=str,
+        default=None,
+        help="Optional artifact label to use instead of run-based filenames.",
+    )
     parser.add_argument(
         "--datasets",
         nargs="+",
@@ -453,17 +493,35 @@ def main():
         split_root = os.path.join(dataset_cfg.data_root, "train")
         pair_configs = paired_categories(split_root)
 
-        for run_index in range(args.start_run_index, args.start_run_index + args.num_runs):
-            run_seed = args.seed + run_index - 1
+        if args.artifact_label:
+            run_specs = [(None, args.seed, args.artifact_label)]
+        else:
+            run_specs = [
+                (run_index, args.seed + run_index - 1, None)
+                for run_index in range(args.start_run_index, args.start_run_index + args.num_runs)
+            ]
+
+        for run_index, run_seed, artifact_label in run_specs:
             set_seed(run_seed)
             cfg = TrainConfig(args.epochs, args.batch_size, args.lr, run_seed)
             run_results = []
             for pair_name, class_names in pair_configs:
-                run_results.append(train_one_pair(dataset_cfg, pair_name, class_names, cfg, device, run_index))
+                run_results.append(
+                    train_one_pair(
+                        dataset_cfg,
+                        pair_name,
+                        class_names,
+                        cfg,
+                        device,
+                        run_index=run_index,
+                        artifact_label=artifact_label,
+                    )
+                )
             dataset_results.extend(run_results)
             all_results.extend(run_results)
 
-            summary_path = os.path.join(dataset_cfg.model_dir, f"training_summary_run{run_index}.json")
+            summary_tag = artifact_tag(run_index, artifact_label)
+            summary_path = os.path.join(dataset_cfg.model_dir, f"training_summary_{summary_tag}.json")
             with open(summary_path, "w", encoding="utf-8") as f:
                 json.dump(run_results, f, indent=2)
 
@@ -471,9 +529,13 @@ def main():
                 dataset_cfg,
                 run_index,
                 [pair_name for pair_name, _ in PAIR_RUNS],
+                artifact_label=artifact_label,
             )
 
-        summary_path = os.path.join(dataset_cfg.model_dir, "training_summary_all_runs.json")
+        summary_name = (
+            f"training_summary_{args.artifact_label}.json" if args.artifact_label else "training_summary_all_runs.json"
+        )
+        summary_path = os.path.join(dataset_cfg.model_dir, summary_name)
         with open(summary_path, "w", encoding="utf-8") as f:
             json.dump(dataset_results, f, indent=2)
 

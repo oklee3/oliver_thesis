@@ -8,13 +8,13 @@ from PIL import Image, ImageDraw
 RUN_ORDER = ["no_overlap", "no_overlap_bw", "overlap", "overlap_bw"]
 
 
-def default_curve_paths(model_name: str) -> Dict[str, str]:
+def default_curve_paths(model_name: str, artifact_label: str) -> Dict[str, str]:
     return {
         run_name: os.path.join(
-            "outline_images",
+            "images",
             model_name,
             "loss_curves",
-            f"{model_name}_{run_name}_outline_loss_curve.png",
+            f"{model_name}_{run_name}_{artifact_label}_loss_curve.png",
         )
         for run_name in RUN_ORDER
     }
@@ -37,8 +37,8 @@ def load_images(curve_paths: Dict[str, str]) -> Dict[str, Image.Image]:
     return images
 
 
-def combine_images(model_name: str, out_path: str, run_order: Sequence[str]) -> str:
-    images = load_images(default_curve_paths(model_name))
+def combine_images(model_name: str, artifact_label: str, out_path: str, run_order: Sequence[str]) -> str:
+    images = load_images(default_curve_paths(model_name, artifact_label))
     widths = [images[run_name].width for run_name in run_order]
     heights = [images[run_name].height for run_name in run_order]
     tile_width = max(widths)
@@ -52,7 +52,7 @@ def combine_images(model_name: str, out_path: str, run_order: Sequence[str]) -> 
         "white",
     )
     draw = ImageDraw.Draw(canvas)
-    title = f"{model_name.upper()} Outline Loss Curves"
+    title = f"{model_name.upper()} Outline Loss Curves - {artifact_label}"
     draw.text((padding, 15), title, fill="black")
 
     for idx, run_name in enumerate(run_order):
@@ -78,11 +78,16 @@ def main():
         choices=["cnn", "mlp"],
         help="Model families to combine.",
     )
+    parser.add_argument("--artifact-label", type=str, default="ggplot")
     args = parser.parse_args()
 
     for model_name in args.models:
-        out_path = os.path.join("outline_images", model_name, f"{model_name}_outline_loss_curves_grid.png")
-        saved_path = combine_images(model_name, out_path, RUN_ORDER)
+        out_path = os.path.join(
+            "images",
+            model_name,
+            f"{model_name}_outline_loss_curves_{args.artifact_label}_grid.png",
+        )
+        saved_path = combine_images(model_name, args.artifact_label, out_path, RUN_ORDER)
         print(f"Saved {saved_path}")
 
 
